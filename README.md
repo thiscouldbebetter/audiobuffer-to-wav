@@ -4,7 +4,7 @@ This repository was originally forked from https://github.com/Experience-Monks/a
 with the intention of someday using it as a reference implementation
 to debug my own audio recording applications. 
 The repository and the files it contains
-have be reformatted to my own preferences,
+have been reformatted to my own preferences,
 and things deemed irrelevant to my own interests discarded.
 
 To run, open the file Source/AudioBufferToWavConverter.html
