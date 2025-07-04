@@ -1,5 +1,21 @@
 # audiobuffer-to-wav
 
+This repository was originally forked from https://github.com/Experience-Monks/audiobuffer-to-wav,
+with the intention of someday using it as a reference implementation
+to debug my own audio recording applications. 
+The repository and the files it contains
+have be reformatted to my own preferences,
+and things deemed irrelevant to my own interests discarded.
+
+To run, open the file Source/AudioBufferToWavConverter.html
+in a web browser that runs JavaScript.
+
+<img src="Screenshot.png" />
+
+The contents of the file Readme.md from the original repository are given below:
+
+# audiobuffer-to-wav
+
 [![stable](http://badges.github.io/stability-badges/dist/stable.svg)](http://github.com/badges/stability-badges)
 
 Encodes the contents of an [AudioBuffer](https://developer.mozilla.org/en-US/docs/Web/API/AudioBuffer) from the WebAudio API as WAVE. Supports 16-bit PCM and 32-bit float data.
