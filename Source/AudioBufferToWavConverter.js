@@ -5,6 +5,11 @@ class AudioBufferToWavConverter
 	{
 		this.samplesAre32BitFloatsNot16BitPcm =
 			samplesAre32BitFloatsNot16BitPcm || false;
+
+		if (this.samplesAre32BitFloatsNot16BitPcm)
+		{
+			throw new Error("Not yet supported!");
+		}
 	}
 
 	convertAudioBuffer(buffer)
@@ -61,38 +66,45 @@ class AudioBufferToWavConverter
 	{
 		var bytesPerSample = bitsPerSample / 8;
 
-		var buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
+		var wavFileAsStream = new ByteStream();
+		var converter = new ByteConverter();
 
-		var view = new DataView(buffer);
-
-		this.writeString(view, 0, "RIFF");
 		var riffChunkLength =
 			36 + samples.length * bytesPerSample;
-		view.setUint32(4, riffChunkLength, true);
 		var riffTypeCode = "WAVE";
-		this.writeString(view, 8, riffTypeCode);
-		this.writeString(view, 12, "fmt ");
 		var formatChunkLength = 16;
-		view.setUint32(16, formatChunkLength, true);
-		view.setUint16(20, wavFormatCode, true);
-		view.setUint16(22, channelCount, true);
-		view.setUint32(24, sampleRate, true)
 		var blockAlign = channelCount * bytesPerSample;
 		var byteRate = sampleRate * blockAlign;
-		view.setUint32(28, byteRate, true);
-		view.setUint16(32, blockAlign, true);
-		view.setUint16(34, bitsPerSample, true);
-		this.writeString(view, 36, "data");
 		var dataChunkLength = samples.length * bytesPerSample;
-		view.setUint32(40, dataChunkLength, true);
+
+		wavFileAsStream
+			.bytesWrite(converter.stringToBytes("RIFF") )
+			.bytesWrite(converter.integerToBytesLsf(riffChunkLength, 4) )
+			.bytesWrite(converter.stringToBytes(riffTypeCode) )
+			.bytesWrite(converter.stringToBytes("fmt ") )
+			.bytesWrite(converter.integerToBytesLsf(formatChunkLength, 4) )
+			.bytesWrite(converter.integerToBytesLsf(wavFormatCode, 2) )
+			.bytesWrite(converter.integerToBytesLsf(channelCount, 2) )
+			.bytesWrite(converter.integerToBytesLsf(sampleRate, 4 ) )
+			.bytesWrite(converter.integerToBytesLsf(byteRate, 4) )
+			.bytesWrite(converter.integerToBytesLsf(blockAlign, 2 ) )
+			.bytesWrite(converter.integerToBytesLsf(bitsPerSample, 2) )
+			.bytesWrite(converter.stringToBytes("data") )
+			.bytesWrite(converter.integerToBytesLsf(dataChunkLength, 4) );
+
 		if (wavFormatCode === 1)
 		{
-			// Raw PCM.
-			this.floatTo16BitPCM(view, 44, samples);
+			this.samplesFromFloatsToInt16sAndWrite
+			(
+				samples, wavFileAsStream, converter
+			);
 		}
 		else if (wavFormatCode == 3)
 		{
-			this.writeFloat32(view, 44, samples);
+			this.samplesWriteAsIs
+			(
+				samples, wavFileAsStream, converter
+			);
 		}
 		else
 		{
@@ -102,7 +114,17 @@ class AudioBufferToWavConverter
 			);
 		}
 
-		return buffer;
+		var wavFileAsBytes = wavFileAsStream.bytes;
+
+		var wavFileAsBuffer = new ArrayBuffer(wavFileAsBytes.length);
+		var wavFileAsDataView = new DataView(wavFileAsBuffer);
+		for (var i = 0; i < wavFileAsBytes.length; i++)
+		{
+			var byteToWrite = wavFileAsBytes[i];
+			wavFileAsDataView.setUint8(i, byteToWrite);
+		}
+
+		return wavFileAsBuffer;
 	}
 
 	interleaveNumberArrays(left, right)
@@ -125,51 +147,49 @@ class AudioBufferToWavConverter
 		{
 			var leftElement = left[i];
 			var rightElement = right[i];
-			var interleavedIndex = i * 2;
+			var interleavedIndex = i * 2;	
 			interleaved[interleavedIndex] = leftElement;
 			interleaved[interleavedIndex + 1] = rightElement;
 		}
 
-		return interleaved
+		return interleaved;
 	}
 
-	writeFloat32(output, offset, input)
+	samplesFromFloatsToInt16sAndWrite
+	(
+		samplesToConvertAsFloats, streamToWriteTo, converter
+	)
 	{
-		for (var i = 0; i < input.length; i++, offset += 4)
+		for (var i = 0; i < samplesToConvertAsFloats.length; i++)
 		{
-			output.setFloat32(offset, input[i], true);
-		}
-	}
+			var sampleAsFraction =
+				samplesToConvertAsFloats[i];
 
-	floatTo16BitPCM (output, offset, input)
-	{
-		for (var i = 0; i < input.length; i++, offset += 2)
-		{
-			var sample = input[i];
+			var sampleAsFractionTrimmed =
+				Math.max(-1, Math.min(1, sampleAsFraction) );
 
-			var sampleTrimmed =
-				Math.max(-1, Math.min(1, sample) );
+			var multiplier =
+				sampleAsFractionTrimmed < 0
+				? 0x8000
+				: 0x7FFF;
 
 			var sampleAs16BitPcm =
-				sampleTrimmed < 0
-				? sampleTrimmed * 0x8000
-				: sampleTrimmed * 0x7FFF;
+				sampleAsFractionTrimmed * multiplier;
 
-			output.setInt16
-			(
-				offset,
-				sampleAs16BitPcm,
-				true
-			)
+			var sampleAsBytes =
+				converter.integerToBytesLsf(sampleAs16BitPcm, 2);
+
+			streamToWriteTo.bytesWrite(sampleAsBytes);
 		}
 	}
 
-	writeString (view, offset, stringToWrite)
+	samplesWriteAsIs(samplesToWriteAsFloat32s, streamToWriteTo, converter)
 	{
-		for (var i = 0; i < stringToWrite.length; i++)
+		for (var i = 0; i < samplesToWriteAsFloat32s.length; i++)
 		{
-			var charValueToSet = stringToWrite.charCodeAt(i);
-			view.setUint8(offset + i, charValueToSet);
+			var sampleAsFloat32 = samplesToWriteAsFloat32s[i];
+			var sampleAsBytes = converter.floatingPointToBytes(4);
+			streamToWriteTo.bytesWrite(sampleAsFloat32);
 		}
 	}
 }
